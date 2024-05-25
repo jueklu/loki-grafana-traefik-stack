@@ -1,0 +1,34 @@
+apiVersion: 1
+
+datasources:
+  - name: Loki-Container
+    type: loki
+    access: proxy
+    url: http://loki:3100
+    version: 1
+    editable: false
+    isDefault: true
+
+  - name: Loki-VarLog
+    type: loki
+    access: proxy
+    url: http://loki2:3100
+    version: 1
+    editable: false
+    isDefault: false
+
+  - name: Loki-Systemd-Journal
+    type: loki
+    access: proxy
+    url: http://loki3:3100
+    version: 1
+    editable: false
+    isDefault: false
+
+  - name: Loki-Kubernetes
+    type: loki
+    access: proxy
+    url: http://loki4:3100
+    version: 1
+    editable: false
+    isDefault: false

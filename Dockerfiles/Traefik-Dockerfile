@@ -1,0 +1,15 @@
+# Use the latest Traefik image as base
+FROM traefik:v2.10
+
+# Expose ports 80,443,8080
+EXPOSE 80
+EXPOSE 443
+EXPOSE 8080
+
+# Copy the tls-configuration configuration file
+COPY ./tls-configuration.yaml /etc/traefik/dynamic/tls-configuration.yaml
+# Copy the TLS certificates
+COPY ./Traefik-Certs/ /etc/certs/
+
+# Specify the command to run on container start
+CMD ["traefik", "--configFile=/etc/traefik/traefik.yml"]

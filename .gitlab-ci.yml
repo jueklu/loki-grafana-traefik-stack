@@ -1,0 +1,64 @@
+stages:
+  - build-grafana
+  - build-traefik
+  - deploy
+
+variables:
+  GRAFANA_IMAGE: $CI_REGISTRY_IMAGE/grafana:$CI_COMMIT_SHA
+  TRAEFIK_IMAGE: $CI_REGISTRY_IMAGE/traefik:$CI_COMMIT_SHA
+
+build-grafana:
+  stage: build-grafana
+  image: docker:20.10.16
+  variables:
+    DOCKER_DRIVER: overlay2
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
+  services:
+    - docker:20.10.16-dind
+  before_script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+  script:
+    - docker pull $CI_REGISTRY_IMAGE/grafana:latest || true
+    - docker build -f Dockerfiles/Grafana-Dockerfile --cache-from $CI_REGISTRY_IMAGE/grafana:latest 
+      --tag $GRAFANA_IMAGE --tag $CI_REGISTRY_IMAGE/grafana:latest .
+    - docker push $GRAFANA_IMAGE
+    - docker push $CI_REGISTRY_IMAGE/grafana:latest
+
+build-traefik:
+  stage: build-traefik
+  image: docker:20.10.16
+  variables:
+    DOCKER_DRIVER: overlay2
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
+  services:
+    - docker:20.10.16-dind
+  before_script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+  script:
+    - docker pull $CI_REGISTRY_IMAGE/traefik:latest || true
+    - docker build -f Dockerfiles/Traefik-Dockerfile --cache-from $CI_REGISTRY_IMAGE/traefik:latest 
+      --tag $TRAEFIK_IMAGE --tag $CI_REGISTRY_IMAGE/traefik:latest .
+    - docker push $TRAEFIK_IMAGE
+    - docker push $CI_REGISTRY_IMAGE/traefik:latest
+
+deploy:
+  stage: deploy
+  image: alpine
+  before_script:
+    - apk add gettext openssh-client
+    - eval `ssh-agent`
+    - ssh-add <(echo "$SSH_PRIVATE_KEY")
+    - mkdir -p ~/.ssh
+    - chmod 700 ~/.ssh
+    - touch ~/.ssh/known_hosts
+    - chmod 600 ~/.ssh/known_hosts
+    - echo $SSH_HOST_KEY >> ~/.ssh/known_hosts
+  script:
+    - envsubst < Docker-Compose/loki_docker-compose.tmpl > docker-compose-grafana.yml
+    - envsubst < Docker-Compose/traefik_docker-compose.tmpl > docker-compose-traefik.yml
+    - scp docker-compose-grafana.yml gitlab-deploy@192.168.70.11:/opt/loki
+    - scp docker-compose-traefik.yml gitlab-deploy@192.168.70.11:/opt/traefik
+    - ssh gitlab-deploy@192.168.70.11 "cd /opt/loki; docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY; docker compose -f docker-compose-grafana.yml up -d"
+    - ssh gitlab-deploy@192.168.70.11 "cd /opt/traefik; docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY; docker compose -f docker-compose-traefik.yml up -d"
